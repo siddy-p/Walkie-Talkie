@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database');
 const { JWT_SECRET } = require('./auth');
-const { isCloudinaryActive, uploadToCloudinary } = require('../cloudinary');
+const { isFTPActive, uploadToFTP } = require('../storage');
 
 // Setup multer for file/photo backup storage
 const uploadDir = process.env.DATA_DIR 
@@ -163,8 +163,8 @@ router.post('/photos', authenticateToken, upload.single('photo'), async (req, re
   try {
     if (req.file) {
       let fileUrl;
-      if (isCloudinaryActive()) {
-        fileUrl = await uploadToCloudinary(req.file.path, 'photos');
+      if (isFTPActive()) {
+        fileUrl = await uploadToFTP(req.file.path, req.file.filename, 'photos');
       } else {
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
@@ -201,8 +201,8 @@ router.post('/files', authenticateToken, upload.single('file'), async (req, res)
     }
 
     let fileUrl;
-    if (isCloudinaryActive()) {
-      fileUrl = await uploadToCloudinary(req.file.path, 'files');
+    if (isFTPActive()) {
+      fileUrl = await uploadToFTP(req.file.path, req.file.filename, 'files');
     } else {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
