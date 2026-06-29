@@ -16,8 +16,102 @@ const dataDir = process.env.DATA_DIR || __dirname;
 const DB_FILE = path.join(dataDir, 'walkie_talkie.db');
 const JSON_DB_FILE = path.join(dataDir, 'walkie_talkie_db.json');
 
+const translateSql = (sql) => {
+  let index = 1;
+  return sql.replace(/\?/g, () => `$${index++}`);
+};
+
+async function setupPostgresDb(connectionString) {
+  const { Pool } = require('pg');
+  const pool = new Pool({
+    connectionString: connectionString,
+    ssl: { rejectUnauthorized: false }
+  });
+
+  try {
+    await pool.query('SELECT NOW()');
+    console.log("🐘 PostgreSQL (Supabase/Neon) connected successfully.");
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      uuid TEXT UNIQUE,
+      username TEXT UNIQUE,
+      password TEXT,
+      display_name TEXT,
+      avatar_url TEXT,
+      role TEXT,
+      created_at BIGINT
+    )`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      type TEXT,
+      name TEXT,
+      created_at BIGINT
+    )`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS chat_participants (
+      chat_id TEXT,
+      user_id TEXT,
+      PRIMARY KEY (chat_id, user_id)
+    )`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      chat_id TEXT,
+      sender_id TEXT,
+      content TEXT,
+      type TEXT,
+      status TEXT,
+      timestamp BIGINT,
+      file_url TEXT,
+      file_name TEXT,
+      file_size BIGINT,
+      latitude DOUBLE PRECISION,
+      longitude DOUBLE PRECISION
+    )`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS sync_metadata (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      type TEXT,
+      data TEXT,
+      timestamp BIGINT
+    )`);
+
+    // Backfill uuid for users
+    await pool.query(`UPDATE users SET uuid = id WHERE uuid IS NULL`);
+
+    dbInstance = {
+      type: 'postgres',
+      pool: pool,
+      run: async (sql, params = []) => {
+        const result = await pool.query(translateSql(sql), params);
+        return { lastID: null, changes: result.rowCount };
+      },
+      get: async (sql, params = []) => {
+        const result = await pool.query(translateSql(sql), params);
+        return result.rows[0] || null;
+      },
+      all: async (sql, params = []) => {
+        const result = await pool.query(translateSql(sql), params);
+        return result.rows;
+      }
+    };
+
+    return dbInstance;
+  } catch (err) {
+    console.error("❌ PostgreSQL initialization error:", err);
+    throw err;
+  }
+}
+
 // Initialize database
 function initDb() {
+  if (process.env.DATABASE_URL) {
+    return setupPostgresDb(process.env.DATABASE_URL);
+  }
+
   return new Promise((resolve, reject) => {
     if (sqlite3) {
       const db = new sqlite3.Database(DB_FILE, (err) => {

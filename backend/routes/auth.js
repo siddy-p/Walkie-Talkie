@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../database');
+const { isCloudinaryActive, uploadToCloudinary } = require('../cloudinary');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'walkie_talkie_secret_key_2026';
 const multer = require('multer');
@@ -163,8 +164,13 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const avatarUrl = `${baseUrl}/uploads/${user.username}/${req.file.filename}`;
+    let avatarUrl;
+    if (isCloudinaryActive()) {
+      avatarUrl = await uploadToCloudinary(req.file.path, 'avatars');
+    } else {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      avatarUrl = `${baseUrl}/uploads/${user.username}/${req.file.filename}`;
+    }
 
     const db = getDb();
     await db.run(

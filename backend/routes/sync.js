@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../database');
 const { JWT_SECRET } = require('./auth');
+const { isCloudinaryActive, uploadToCloudinary } = require('../cloudinary');
 
 // Setup multer for file/photo backup storage
 const uploadDir = process.env.DATA_DIR 
@@ -161,8 +162,14 @@ router.post('/calendar', authenticateToken, async (req, res) => {
 router.post('/photos', authenticateToken, upload.single('photo'), async (req, res) => {
   try {
     if (req.file) {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
+      let fileUrl;
+      if (isCloudinaryActive()) {
+        fileUrl = await uploadToCloudinary(req.file.path, 'photos');
+      } else {
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
+      }
+
       await saveSyncMetadata(req.user.id, 'photos', {
         filename: req.file.originalname,
         size: req.file.size,
@@ -193,8 +200,14 @@ router.post('/files', authenticateToken, upload.single('file'), async (req, res)
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
+    let fileUrl;
+    if (isCloudinaryActive()) {
+      fileUrl = await uploadToCloudinary(req.file.path, 'files');
+    } else {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
+    }
+
     await saveSyncMetadata(req.user.id, 'files', {
       filename: req.file.originalname,
       size: req.file.size,
