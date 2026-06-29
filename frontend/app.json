@@ -12,12 +12,7 @@
     },
     "android": {
       "package": "com.walkietalkie.app",
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
+      "icon": "./assets/icon.png",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "READ_MEDIA_IMAGES",
