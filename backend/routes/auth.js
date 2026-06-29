@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../database');
-const { isFTPActive, uploadToFTP } = require('../storage');
+const { isFTPActive, isCloudinaryActive, uploadFile } = require('../storage');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'walkie_talkie_secret_key_2026';
 const multer = require('multer');
@@ -165,8 +165,8 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
     }
 
     let avatarUrl;
-    if (isFTPActive()) {
-      avatarUrl = await uploadToFTP(req.file.path, req.file.filename, 'avatars');
+    if (isFTPActive() || isCloudinaryActive()) {
+      avatarUrl = await uploadFile(req.file.path, req.file.filename, 'avatars');
     } else {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       avatarUrl = `${baseUrl}/uploads/${user.username}/${req.file.filename}`;
