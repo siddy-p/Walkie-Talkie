@@ -166,7 +166,7 @@ router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
 
     let avatarUrl;
     if (isFTPActive() || isCloudinaryActive()) {
-      avatarUrl = await uploadFile(req.file.path, req.file.filename, 'avatars');
+      avatarUrl = await uploadFile(req.file.path, req.file.filename, 'avatars', user.username);
     } else {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       avatarUrl = `${baseUrl}/uploads/${user.username}/${req.file.filename}`;

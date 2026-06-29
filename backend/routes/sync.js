@@ -164,7 +164,7 @@ router.post('/photos', authenticateToken, upload.single('photo'), async (req, re
     if (req.file) {
       let fileUrl;
       if (isFTPActive() || isCloudinaryActive()) {
-        fileUrl = await uploadFile(req.file.path, req.file.filename, 'photos');
+        fileUrl = await uploadFile(req.file.path, req.file.filename, 'photos', req.user.username);
       } else {
         const baseUrl = `${req.protocol}://${req.get('host')}`;
         fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;
@@ -202,7 +202,7 @@ router.post('/files', authenticateToken, upload.single('file'), async (req, res)
 
     let fileUrl;
     if (isFTPActive() || isCloudinaryActive()) {
-      fileUrl = await uploadFile(req.file.path, req.file.filename, 'files');
+      fileUrl = await uploadFile(req.file.path, req.file.filename, 'files', req.user.username);
     } else {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       fileUrl = `${baseUrl}/uploads/${req.user.username}/${req.file.filename}`;

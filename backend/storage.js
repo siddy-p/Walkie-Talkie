@@ -19,14 +19,14 @@ const isCloudinaryActive = () => {
  * @param {string} folder - Folder name (e.g. 'avatars', 'photos', 'files')
  * @returns {Promise<string>} - The public secure URL of the uploaded asset
  */
-const uploadFile = async (localFilePath, remoteFileName, folder = 'misc') => {
+const uploadFile = async (localFilePath, remoteFileName, folder = 'misc', username = 'unknown') => {
   // 1. Cloudinary upload (Easiest, zero-setup, free HTTPS domain)
   if (isCloudinaryActive()) {
     try {
-      console.log(`📤 Uploading to Cloudinary folder "${folder}": ${remoteFileName}`);
+      console.log(`📤 Uploading to Cloudinary folder "${username}/${folder}": ${remoteFileName}`);
       const result = await cloudinary.uploader.upload(localFilePath, {
         resource_type: 'auto',
-        folder: `walkie_talkie/${folder}`
+        folder: `walkie_talkie/${username}/${folder}`
       });
       console.log(`✅ Cloudinary upload complete.`);
       
@@ -47,7 +47,7 @@ const uploadFile = async (localFilePath, remoteFileName, folder = 'misc') => {
     try {
       const ftpHost = process.env.FTP_HOST;
       const ftpPort = parseInt(process.env.FTP_PORT || '21', 10);
-      const targetDir = `${process.env.FTP_UPLOAD_DIR || 'uploads'}/${folder}`.replace(/\/+/g, '/');
+      const targetDir = `${process.env.FTP_UPLOAD_DIR || 'uploads'}/${username}/${folder}`.replace(/\/+/g, '/');
 
       console.log(`🔌 Connecting to FTP ${ftpHost} for upload to "${targetDir}"...`);
       await client.access({
@@ -64,7 +64,7 @@ const uploadFile = async (localFilePath, remoteFileName, folder = 'misc') => {
       console.log(`✅ FTP upload complete.`);
 
       const mediaBaseUrl = process.env.MEDIA_BASE_URL || `http://${ftpHost}/uploads`;
-      const publicUrl = `${mediaBaseUrl}/${folder}/${remoteFileName}`.replace(/([^:]\/)\/+/g, '$1');
+      const publicUrl = `${mediaBaseUrl}/${username}/${folder}/${remoteFileName}`.replace(/([^:]\/)\/+/g, '$1');
 
       cleanLocalFile(localFilePath);
       return publicUrl;
