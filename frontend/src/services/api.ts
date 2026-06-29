@@ -2,8 +2,8 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-// Set to your computer's local IP address so physical phones can connect to the host backend
-export const API_URL = 'http://192.168.1.39:3000';
+// Set to the production Render backend URL
+export const API_URL = 'https://walkie-talkie-backend-prlo.onrender.com';
 
 const api = axios.create({
   baseURL: API_URL,
