@@ -12,8 +12,9 @@ try {
   console.warn("⚠️  Could not load native 'sqlite3' package. Falling back to JSON file database for compatibility.");
 }
 
-const DB_FILE = path.join(__dirname, 'walkie_talkie.db');
-const JSON_DB_FILE = path.join(__dirname, 'walkie_talkie_db.json');
+const dataDir = process.env.DATA_DIR || __dirname;
+const DB_FILE = path.join(dataDir, 'walkie_talkie.db');
+const JSON_DB_FILE = path.join(dataDir, 'walkie_talkie_db.json');
 
 // Initialize database
 function initDb() {
