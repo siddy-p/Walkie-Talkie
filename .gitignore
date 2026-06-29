@@ -1,0 +1,42 @@
+# Dependency directories
+node_modules/
+
+# Local database and uploads
+backend/walkie_talkie.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Expo
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/expo-env.d.ts
+
+# Native builds
+frontend/android/
+frontend/ios/
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+*.swp
+
+
+# Local env files
+.env*.local
+.env

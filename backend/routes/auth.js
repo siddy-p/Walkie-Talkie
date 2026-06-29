@@ -1,0 +1,290 @@
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const { getDb } = require('../database');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'walkie_talkie_secret_key_2026';
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return cb(new Error('Unauthorized'));
+    try {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.decodedUser = decoded;
+      const userDir = path.join(uploadDir, decoded.username || 'unknown');
+      if (!fs.existsSync(userDir)) {
+        fs.mkdirSync(userDir, { recursive: true });
+      }
+      cb(null, userDir);
+    } catch (e) {
+      cb(e);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    let ext = path.extname(file.originalname);
+    if (file.mimetype === 'image/jpeg') ext = '.jpg';
+    else if (file.mimetype === 'image/png') ext = '.png';
+    cb(null, 'avatar-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+// Register User
+router.post('/register', async (req, res) => {
+  const { username, password, displayName } = req.body;
+  
+  if (!username || !password || !displayName) {
+    return res.status(400).json({ error: 'Username, password, and display name are required' });
+  }
+
+  try {
+    const db = getDb();
+    
+    // Check if user exists
+    const existingUser = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    const userId = 'usr_' + Math.random().toString(36).substr(2, 9);
+    // Permanent UUID — never changes even if username or display_name changes
+    const permanentUuid = uuidv4();
+    const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${permanentUuid}`;
+    const role = username.toLowerCase() === 'admin' ? 'admin' : 'user';
+    
+    await db.run(
+      'INSERT INTO users (id, uuid, username, password, display_name, avatar_url, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, permanentUuid, username, hashedPassword, displayName, avatarUrl, role, Date.now()]
+    );
+
+    // JWT includes both internal id and permanent uuid
+    const token = jwt.sign({ id: userId, uuid: permanentUuid, username }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: userId,
+        uuid: permanentUuid,
+        username,
+        displayName,
+        avatarUrl,
+        role
+      }
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Login User
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  try {
+    const db = getDb();
+    
+    // Get user
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username.toLowerCase()]);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Backfill uuid if missing (existing users created before this change)
+    let userUuid = user.uuid;
+    if (!userUuid) {
+      userUuid = uuidv4();
+      await db.run('UPDATE users SET uuid = ? WHERE id = ?', [userUuid, user.id]);
+    }
+
+    // Create JWT — includes permanent uuid
+    const token = jwt.sign(
+      { id: user.id, uuid: userUuid, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        uuid: userUuid,
+        username: user.username,
+        displayName: user.display_name,
+        avatarUrl: user.avatar_url,
+        role: user.role || 'user'
+      }
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Upload Avatar
+router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const user = req.decodedUser;
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const avatarUrl = `${baseUrl}/uploads/${user.username}/${req.file.filename}`;
+
+    const db = getDb();
+    await db.run(
+      'UPDATE users SET avatar_url = ? WHERE id = ?',
+      [avatarUrl, user.id]
+    );
+
+    res.json({ success: true, avatarUrl });
+  } catch (err) {
+    console.error('Upload avatar error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get User Profile
+router.get('/profile', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = getDb();
+    const user = await db.get('SELECT id, uuid, username, display_name, avatar_url, role FROM users WHERE id = ?', [decoded.id]);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      id: user.id,
+      uuid: user.uuid,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      role: user.role || 'user'
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid or expired' });
+  }
+});
+
+// Update User Profile (e.g. Display Name)
+router.post('/update-profile', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { displayName } = req.body;
+    if (!displayName || !displayName.trim()) {
+      return res.status(400).json({ error: 'Display name is required' });
+    }
+
+    const db = getDb();
+    await db.run(
+      'UPDATE users SET display_name = ? WHERE id = ?',
+      [displayName.trim(), decoded.id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid or expired' });
+  }
+});
+
+// Find a user by UUID or @tag (username) — used for Add Contact feature
+router.get('/find-user', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { q } = req.query;
+    if (!q || String(q).trim().length < 2) {
+      return res.status(400).json({ error: 'Query too short' });
+    }
+
+    const query = String(q).trim().replace(/^@/, ''); // strip leading @
+    const db = getDb();
+
+    // Search by UUID (exact) or username (exact or partial)
+    const user = await db.get(
+      `SELECT id, uuid, username, display_name, avatar_url FROM users
+       WHERE (uuid = ? OR username = ?) AND id != ?`,
+      [query, query, decoded.id]
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'No user found with that UUID or tag' });
+    }
+
+    res.json({
+      id: user.id,
+      uuid: user.uuid,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid' });
+  }
+});
+
+// List other users to chat with
+router.get('/users', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = getDb();
+    const users = await db.all('SELECT id, uuid, username, display_name, avatar_url FROM users WHERE id != ?', [decoded.id]);
+    res.json(users);
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid' });
+  }
+});
+
+module.exports = { router, JWT_SECRET };
