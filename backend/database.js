@@ -191,7 +191,9 @@ function initDb() {
             value TEXT,
             PRIMARY KEY (user_id, key)
           )`, (err) => {
-
+            if (err) {
+              reject(err);
+            } else {
               dbInstance = {
                 type: 'sqlite',
                 db: db,
