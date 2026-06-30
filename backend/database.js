@@ -96,6 +96,13 @@ async function setupPostgresDb(connectionString) {
       updated_at BIGINT
     )`);
 
+    // Migrate table to add allow_direct_message if it was created in a previous phase
+    try {
+      await pool.query(`ALTER TABLE user_privacy_settings ADD COLUMN IF NOT EXISTS allow_direct_message INT DEFAULT 1`);
+    } catch (err) {
+      console.warn("Alter table user_privacy_settings warning:", err.message);
+    }
+
     // Backfill uuid for users
     await pool.query(`UPDATE users SET uuid = id WHERE uuid IS NULL`);
 
