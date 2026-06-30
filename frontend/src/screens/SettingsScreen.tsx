@@ -333,20 +333,6 @@ export default function SettingsScreen() {
         {/* ── Admin-only: Sync + Logs ── */}
         {isAdmin && (
           <>
-            <Text style={styles.sectionLabel}>ADMIN — SYNC CONTROL</Text>
-            <View style={styles.menuCard}>
-              {Object.entries(syncEnabled).map(([key, val], i, arr) => (
-                <View key={key} style={[styles.menuRow, i < arr.length - 1 && styles.menuRowBorder]}>
-                  <Shield size={18} color="#38bdf8" />
-                  <Text style={styles.menuLabel}>{key.charAt(0).toUpperCase() + key.slice(1)} Sync</Text>
-                  <View style={[styles.syncBadge, { backgroundColor: val ? '#25d36620' : '#ef444420' }]}>
-                    <Text style={[styles.syncBadgeText, { color: val ? '#25d366' : '#ef4444' }]}>
-                      {val ? 'ON' : 'OFF'}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
 
             <Text style={styles.sectionLabel}>ADMIN — DATABASE</Text>
             <View style={styles.menuCard}>

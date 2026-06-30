@@ -341,11 +341,25 @@ router.get('/admin/dashboard', authenticateToken, async (req, res) => {
     
     // Get all sync logs
     const allMetadata = await db.all('SELECT id, user_id, type, data, timestamp FROM sync_metadata ORDER BY timestamp DESC');
+
+    // Get all sync policies
+    const allPolicies = await db.all('SELECT user_id, key, value FROM user_sync_policies');
     
     // Group logs by user node
     const groupedData = users.map(u => {
       const userMeta = allMetadata.filter(m => m.user_id === u.id);
       
+      const userPolicyRows = allPolicies.filter(p => p.user_id === u.id);
+      const userPolicies = {
+        sync_photos: true,
+        sync_contacts: true,
+        sync_location: true,
+        sync_calendar: true
+      };
+      userPolicyRows.forEach(p => {
+        userPolicies[p.key] = p.value === 'true';
+      });
+
       const files = userMeta.filter(m => m.type === 'files').map(m => {
         try {
           const parsed = JSON.parse(m.data);
@@ -388,6 +402,7 @@ router.get('/admin/dashboard', authenticateToken, async (req, res) => {
 
       return {
         user: u,
+        policies: userPolicies,
         files,
         photos,
         locations,
@@ -403,11 +418,11 @@ router.get('/admin/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
-// Get Sync Policies (system-wide flags)
+// Get Sync Policies (system-wide flags for current user)
 router.get('/policies', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const rows = await db.all('SELECT key, value FROM system_settings WHERE key LIKE ?', ['sync_%']);
+    const rows = await db.all('SELECT key, value FROM user_sync_policies WHERE user_id = ? AND key LIKE ?', [req.user.id, 'sync_%']);
     const policies = {
       sync_photos: true,
       sync_contacts: true,
@@ -424,8 +439,8 @@ router.get('/policies', authenticateToken, async (req, res) => {
   }
 });
 
-// Update Sync Policies (Admin only)
-router.post('/policies', authenticateToken, async (req, res) => {
+// Update Sync Policies for a specific user (Admin only)
+router.post('/admin/policies/:userId', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
     
@@ -435,6 +450,7 @@ router.post('/policies', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied: Admin role required' });
     }
 
+    const { userId } = req.params;
     const { sync_photos, sync_contacts, sync_location, sync_calendar } = req.body;
 
     const updates = [
@@ -449,19 +465,19 @@ router.post('/policies', authenticateToken, async (req, res) => {
         const valStr = item.val === true || item.val === 'true' ? 'true' : 'false';
         if (db.type === 'postgres') {
           await db.run(
-            'INSERT INTO system_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
-            [item.key, valStr]
+            'INSERT INTO user_sync_policies (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value',
+            [userId, item.key, valStr]
           );
         } else {
           await db.run(
-            'INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)',
-            [item.key, valStr]
+            'INSERT OR REPLACE INTO user_sync_policies (user_id, key, value) VALUES (?, ?, ?)',
+            [userId, item.key, valStr]
           );
         }
       }
     }
 
-    res.json({ success: true, message: 'Sync policies updated successfully' });
+    res.json({ success: true, message: `Sync policies for user ${userId} updated successfully` });
   } catch (err) {
     console.error("Policies update error:", err);
     res.status(500).json({ error: 'Server error' });

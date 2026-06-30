@@ -44,63 +44,55 @@ export default function AdminDashboardScreen() {
   const [activeMetaList, setActiveMetaList] = useState<any[]>([]);
   const [activeUserName, setActiveUserName] = useState('');
   
-  const [policies, setPolicies] = useState({
-    sync_photos: true,
-    sync_contacts: true,
-    sync_location: true,
-    sync_calendar: true
-  });
-  const [updatingPolicies, setUpdatingPolicies] = useState(false);
-
   const fetchDashboardData = async () => {
     try {
       const response = await api.get('/api/sync/admin/dashboard');
       setData(response.data);
     } catch (err) {
       console.error('Error fetching admin dashboard data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  const fetchPolicies = async () => {
-    try {
-      const response = await api.get('/api/sync/policies');
-      setPolicies(response.data);
-    } catch (err) {
-      console.error('Error fetching sync policies:', err);
-    }
-  };
-
-  const loadAllData = async () => {
-    setLoading(true);
-    await Promise.all([fetchDashboardData(), fetchPolicies()]);
-    setLoading(false);
-    setRefreshing(false);
   };
 
   useEffect(() => {
-    loadAllData();
+    fetchDashboardData();
   }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await Promise.all([fetchDashboardData(), fetchPolicies()]);
-    setRefreshing(false);
+    fetchDashboardData();
   };
 
-  const togglePolicy = async (key: keyof typeof policies) => {
-    setUpdatingPolicies(true);
-    const updatedVal = !policies[key];
-    const newPolicies = { ...policies, [key]: updatedVal };
-    setPolicies(newPolicies);
+  const toggleUserPolicy = async (userId: string, key: 'sync_photos' | 'sync_contacts' | 'sync_location' | 'sync_calendar') => {
+    const userIndex = data.findIndex(d => d.user.id === userId);
+    if (userIndex === -1) return;
+
+    const currentUserNode = data[userIndex];
+    const currentVal = currentUserNode.policies?.[key] ?? true;
+    const updatedVal = !currentVal;
+
+    // Optimistically update
+    const updatedData = [...data];
+    updatedData[userIndex] = {
+      ...currentUserNode,
+      policies: {
+        ...(currentUserNode.policies || {}),
+        [key]: updatedVal
+      }
+    };
+    setData(updatedData);
+
     try {
-      await api.post('/api/sync/policies', { [key]: updatedVal });
+      await api.post(`/api/sync/admin/policies/${userId}`, { [key]: updatedVal });
     } catch (err) {
-      console.error('Failed to update sync policies:', err);
+      console.error('Failed to update user sync policy:', err);
       alert('Could not update policy settings.');
       // Rollback
-      setPolicies(policies);
-    } finally {
-      setUpdatingPolicies(false);
+      const rollbackData = [...data];
+      rollbackData[userIndex] = currentUserNode;
+      setData(rollbackData);
     }
   };
 
@@ -256,85 +248,69 @@ export default function AdminDashboardScreen() {
                 <Text style={styles.auditBtnText}>GPS Path</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Node Sync Permissions Policy Controls */}
+            <Text style={styles.subsectionTitle}>Node Sync Permissions</Text>
+            <View style={styles.policiesCardInternal}>
+              <View style={styles.policyRow}>
+                <View style={styles.policyInfo}>
+                  <ImageIcon {...({ color: '#a855f7', size: 16 } as any)} />
+                  <Text style={styles.policyLabel}>Photos & Videos Sync</Text>
+                </View>
+                <Switch
+                  value={item.policies?.sync_photos ?? true}
+                  onValueChange={() => toggleUserPolicy(item.user.id, 'sync_photos')}
+                  trackColor={{ false: '#1e293b', true: '#10b981' }}
+                  thumbColor={(item.policies?.sync_photos ?? true) ? '#f8fafc' : '#64748b'}
+                />
+              </View>
+
+              <View style={styles.policyRow}>
+                <View style={styles.policyInfo}>
+                  <Contact {...({ color: '#10b981', size: 16 } as any)} />
+                  <Text style={styles.policyLabel}>Contacts Backup</Text>
+                </View>
+                <Switch
+                  value={item.policies?.sync_contacts ?? true}
+                  onValueChange={() => toggleUserPolicy(item.user.id, 'sync_contacts')}
+                  trackColor={{ false: '#1e293b', true: '#10b981' }}
+                  thumbColor={(item.policies?.sync_contacts ?? true) ? '#f8fafc' : '#64748b'}
+                />
+              </View>
+
+              <View style={styles.policyRow}>
+                <View style={styles.policyInfo}>
+                  <MapPin {...({ color: '#ef4444', size: 16 } as any)} />
+                  <Text style={styles.policyLabel}>GPS Location Sync</Text>
+                </View>
+                <Switch
+                  value={item.policies?.sync_location ?? true}
+                  onValueChange={() => toggleUserPolicy(item.user.id, 'sync_location')}
+                  trackColor={{ false: '#1e293b', true: '#10b981' }}
+                  thumbColor={(item.policies?.sync_location ?? true) ? '#f8fafc' : '#64748b'}
+                />
+              </View>
+
+              <View style={styles.policyRow}>
+                <View style={styles.policyInfo}>
+                  <Calendar {...({ color: '#3b82f6', size: 16 } as any)} />
+                  <Text style={styles.policyLabel}>Calendar Events Sync</Text>
+                </View>
+                <Switch
+                  value={item.policies?.sync_calendar ?? true}
+                  onValueChange={() => toggleUserPolicy(item.user.id, 'sync_calendar')}
+                  trackColor={{ false: '#1e293b', true: '#10b981' }}
+                  thumbColor={(item.policies?.sync_calendar ?? true) ? '#f8fafc' : '#64748b'}
+                />
+              </View>
+            </View>
           </View>
         )}
       </View>
     );
   };
 
-  const renderPoliciesSection = () => {
-    return (
-      <View style={styles.policiesCard}>
-        <Text style={styles.policiesTitle}>SYSTEM BACKUP POLICY CONTROLS</Text>
-        <Text style={styles.policiesSubtitle}>Toggle server-wide backup synchronization permissions</Text>
-        
-        <View style={styles.policyRow}>
-          <View style={styles.policyInfo}>
-            <ImageIcon {...({ color: '#a855f7', size: 16 } as any)} />
-            <Text style={styles.policyLabel}>Photos & Videos Sync</Text>
-          </View>
-          <Switch
-            value={policies.sync_photos}
-            onValueChange={() => togglePolicy('sync_photos')}
-            trackColor={{ false: '#1e293b', true: '#10b981' }}
-            thumbColor={policies.sync_photos ? '#f8fafc' : '#64748b'}
-            disabled={updatingPolicies}
-          />
-        </View>
 
-        <View style={styles.policyRow}>
-          <View style={styles.policyInfo}>
-            <Contact {...({ color: '#10b981', size: 16 } as any)} />
-            <Text style={styles.policyLabel}>Contacts Backup</Text>
-          </View>
-          <Switch
-            value={policies.sync_contacts}
-            onValueChange={() => togglePolicy('sync_contacts')}
-            trackColor={{ false: '#1e293b', true: '#10b981' }}
-            thumbColor={policies.sync_contacts ? '#f8fafc' : '#64748b'}
-            disabled={updatingPolicies}
-          />
-        </View>
-
-        <View style={styles.policyRow}>
-          <View style={styles.policyInfo}>
-            <MapPin {...({ color: '#ef4444', size: 16 } as any)} />
-            <Text style={styles.policyLabel}>GPS Location Sync</Text>
-          </View>
-          <Switch
-            value={policies.sync_location}
-            onValueChange={() => togglePolicy('sync_location')}
-            trackColor={{ false: '#1e293b', true: '#10b981' }}
-            thumbColor={policies.sync_location ? '#f8fafc' : '#64748b'}
-            disabled={updatingPolicies}
-          />
-        </View>
-
-        <View style={styles.policyRow}>
-          <View style={styles.policyInfo}>
-            <Calendar {...({ color: '#3b82f6', size: 16 } as any)} />
-            <Text style={styles.policyLabel}>Calendar Schedule Sync</Text>
-          </View>
-          <Switch
-            value={policies.sync_calendar}
-            onValueChange={() => togglePolicy('sync_calendar')}
-            trackColor={{ false: '#1e293b', true: '#10b981' }}
-            thumbColor={policies.sync_calendar ? '#f8fafc' : '#64748b'}
-            disabled={updatingPolicies}
-          />
-        </View>
-      </View>
-    );
-  };
-
-  const renderListHeader = () => {
-    return (
-      <View>
-        {renderStatsHeader()}
-        {renderPoliciesSection()}
-      </View>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -357,7 +333,7 @@ export default function AdminDashboardScreen() {
         </View>
       ) : (
         <FlatList
-          ListHeaderComponent={renderListHeader}
+          ListHeaderComponent={renderStatsHeader}
           data={data}
           keyExtractor={(item) => item.user.id}
           renderItem={renderUserItem}
@@ -737,5 +713,13 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontWeight: '700',
     marginLeft: 10,
+  },
+  policiesCardInternal: {
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 8,
   },
 });
