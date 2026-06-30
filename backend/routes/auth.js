@@ -71,7 +71,17 @@ router.post('/register', async (req, res) => {
     const userId = 'usr_' + Math.random().toString(36).substr(2, 9);
     // Permanent UUID — never changes even if username or display_name changes
     const permanentUuid = uuidv4();
-    const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${permanentUuid}`;
+
+    // Rotate between 10 clean, distinct default avatars
+    const avatarSeeds = [
+      'Felix', 'Aneka', 'Jack', 'Aria', 'Leo', 
+      'Milo', 'Zoey', 'Oliver', 'Luna', 'Jasper'
+    ];
+    const userCountRow = await db.get('SELECT COUNT(*) as count FROM users');
+    const userIndex = userCountRow ? userCountRow.count : 0;
+    const selectedSeed = avatarSeeds[userIndex % avatarSeeds.length];
+    const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${selectedSeed}`;
+
     const role = username.toLowerCase() === 'admin' ? 'admin' : 'user';
     
     await db.run(

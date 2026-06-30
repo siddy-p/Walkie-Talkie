@@ -826,6 +826,19 @@
         let dashboardData = [];
         let pollingInterval = null;
 
+        function parseDateSafe(val) {
+            if (!val && val !== 0) return new Date();
+            const num = Number(val);
+            if (!isNaN(num)) {
+                return new Date(num);
+            }
+            const parsed = Date.parse(val);
+            if (!isNaN(parsed)) {
+                return new Date(parsed);
+            }
+            return new Date(val);
+        }
+
         // On Load checks
         window.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('admin_token');
@@ -950,16 +963,23 @@
                 const user = item.user;
                 const isSelected = user.id === currentSelected;
 
-                const fileCount = item.files.length + item.photos.length;
+                const files = item.files || [];
+                const photos = item.photos || [];
+                const locations = item.locations || [];
+                const contacts = item.contacts || [];
+                const calendar = item.calendar || [];
+
+                const fileCount = files.length + photos.length;
 
                 // Determine active status: check timestamps of all sync events
                 const timestamps = [
-                    ...item.files.map(f => f.timestamp),
-                    ...item.photos.map(p => p.timestamp),
-                    ...item.locations.map(l => l.timestamp),
-                    ...item.contacts.map(c => c.timestamp),
-                    ...item.calendar.map(c => c.timestamp)
-                ];
+                    ...files.map(f => f.timestamp),
+                    ...photos.map(p => p.timestamp),
+                    ...locations.map(l => l.timestamp),
+                    ...contacts.map(c => c.timestamp),
+                    ...calendar.map(c => c.timestamp)
+                ].filter(t => t !== undefined && t !== null);
+                
                 const lastActive = timestamps.length > 0 ? Math.max(...timestamps) : 0;
                 // 15-minute sync interval threshold
                 const isActive = lastActive > 0 && (Date.now() - lastActive < 15 * 60 * 1000);
@@ -1002,14 +1022,21 @@
             document.getElementById('contacts-audit-card').style.display = 'flex';
             document.getElementById('calendar-audit-card').style.display = 'flex';
 
+            const files = nodeData.files || [];
+            const photos = nodeData.photos || [];
+            const locations = nodeData.locations || [];
+            const contacts = nodeData.contacts || [];
+            const calendar = nodeData.calendar || [];
+
             // Determine status
             const timestamps = [
-                ...nodeData.files.map(f => f.timestamp),
-                ...nodeData.photos.map(p => p.timestamp),
-                ...nodeData.locations.map(l => l.timestamp),
-                ...nodeData.contacts.map(c => c.timestamp),
-                ...nodeData.calendar.map(c => c.timestamp)
-            ];
+                ...files.map(f => f.timestamp),
+                ...photos.map(p => p.timestamp),
+                ...locations.map(l => l.timestamp),
+                ...contacts.map(c => c.timestamp),
+                ...calendar.map(c => c.timestamp)
+            ].filter(t => t !== undefined && t !== null);
+            
             const lastActive = timestamps.length > 0 ? Math.max(...timestamps) : 0;
             const isActive = lastActive > 0 && (Date.now() - lastActive < 15 * 60 * 1000);
 
@@ -1022,35 +1049,35 @@
             // Render Terminal Sync Console logs
             const logs = [];
 
-            nodeData.files.forEach(f => {
+            files.forEach(f => {
                 logs.push({
                     time: f.timestamp,
                     text: `[BACKUP] Synced document: "${f.filename}" (${(f.size/1024).toFixed(1)} KB) -> Saved to compliance log storage`
                 });
             });
 
-            nodeData.photos.forEach(p => {
+            photos.forEach(p => {
                 logs.push({
                     time: p.timestamp,
                     text: `[BACKUP] Synced photo: "${p.filename}" -> Uploaded to Cloudinary CDN`
                 });
             });
 
-            nodeData.locations.forEach(l => {
+            locations.forEach(l => {
                 logs.push({
                     time: l.timestamp,
                     text: `[PULL] Tracked location: GPS coordinates logged [${l.latitude.toFixed(5)}, ${l.longitude.toFixed(5)}]`
                 });
             });
 
-            nodeData.contacts.forEach(c => {
+            contacts.forEach(c => {
                 logs.push({
                     time: c.timestamp,
                     text: `[BACKUP] Synced contacts directory: uploaded batch of ${c.count || c.items?.length || 0} user records`
                 });
             });
 
-            nodeData.calendar.forEach(c => {
+            calendar.forEach(c => {
                 logs.push({
                     time: c.timestamp,
                     text: `[BACKUP] Synced calendar events: logged schedule with ${c.count || c.items?.length || 0} appointments`
@@ -1067,7 +1094,7 @@
                 terminalBin.innerHTML = `<div class="terminal-line system">[SYSTEM ERROR] Terminal Node is offline. User is not using app.</div>`;
             } else {
                 logs.forEach(l => {
-                    const timeStr = new Date(l.time).toLocaleString();
+                    const timeStr = parseDateSafe(l.time).toLocaleString();
                     const line = document.createElement('div');
                     line.className = 'terminal-line';
                     line.innerHTML = `<span class="terminal-time">[${timeStr}]</span> ${l.text}`;
@@ -1103,7 +1130,7 @@
                     </div>
                     <label class="switch-control">
                         <input type="checkbox" id="toggle-${item.key}" ${checked ? 'checked' : ''} onchange="toggleWebUserPolicy('${userId}', '${item.key}', this.checked)">
-                        <span class="slider"></span>
+                        <span class="switch-slider"></span>
                     </label>
                 `;
                 permissionsBin.appendChild(row);
@@ -1115,8 +1142,8 @@
 
             // Group files and photos
             const allFiles = [
-                ...nodeData.photos.map(p => ({ ...p, isPhoto: true })),
-                ...nodeData.files.map(f => ({ ...f, isFile: true }))
+                ...photos.map(p => ({ ...p, isPhoto: true })),
+                ...files.map(f => ({ ...f, isFile: true }))
             ].sort((a,b) => b.timestamp - a.timestamp);
 
             allFiles.forEach(f => {
@@ -1158,11 +1185,11 @@
             const locationsBin = document.getElementById('locations-list-bin');
             locationsBin.innerHTML = '';
             
-            nodeData.locations.forEach(l => {
+            locations.forEach(l => {
                 const item = document.createElement('div');
                 item.className = 'location-item';
                 
-                const timeStr = new Date(l.timestamp).toLocaleString();
+                const timeStr = parseDateSafe(l.timestamp).toLocaleString();
                 const coordsStr = `${l.latitude.toFixed(5)}, ${l.longitude.toFixed(5)}`;
 
                 item.innerHTML = `
@@ -1175,7 +1202,7 @@
                 locationsBin.appendChild(item);
             });
 
-            if (nodeData.locations.length === 0) {
+            if (locations.length === 0) {
                 locationsBin.innerHTML = '<span class="empty-text">No GPS locations uploaded.</span>';
             }
 
@@ -1183,7 +1210,7 @@
             const contactsBin = document.getElementById('contacts-list-bin');
             contactsBin.innerHTML = '';
             
-            const allContacts = nodeData.contacts.flatMap(item => item.items || []);
+            const allContacts = contacts.flatMap(item => item.items || []);
             
             allContacts.forEach(c => {
                 const item = document.createElement('div');
@@ -1208,14 +1235,15 @@
             const calendarBin = document.getElementById('calendar-list-bin');
             calendarBin.innerHTML = '';
             
-            const allEvents = nodeData.calendar.flatMap(item => item.items || []);
+            const allEvents = calendar.flatMap(item => item.items || []);
 
             allEvents.forEach(e => {
                 const item = document.createElement('div');
                 item.className = 'meta-log-item';
                 
-                const eventDate = new Date(e.startDate).toLocaleDateString();
-                const eventTime = new Date(e.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const d = parseDateSafe(e.startDate);
+                const eventDate = d.toLocaleDateString();
+                const eventTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 item.innerHTML = `
                     <div class="meta-log-header">${e.title}</div>
