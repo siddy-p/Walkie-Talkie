@@ -291,6 +291,8 @@ router.get('/users', async (req, res) => {
   } catch (err) {
     res.status(401).json({ error: 'Token is invalid' });
   }
+});
+
 // Setup Admin account in database (runs dynamically on SQLite or PostgreSQL)
 router.get('/setup-admin', async (req, res) => {
   try {
