@@ -86,6 +86,16 @@ async function setupPostgresDb(connectionString) {
       PRIMARY KEY (user_id, key)
     )`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS user_privacy_settings (
+      user_id TEXT PRIMARY KEY,
+      profile_hidden INT DEFAULT 0,
+      show_online_status INT DEFAULT 1,
+      allow_direct_message INT DEFAULT 1,
+      show_last_seen INT DEFAULT 1,
+      show_avatar INT DEFAULT 1,
+      updated_at BIGINT
+    )`);
+
     // Backfill uuid for users
     await pool.query(`UPDATE users SET uuid = id WHERE uuid IS NULL`);
 
