@@ -520,6 +520,70 @@
             background: rgba(239, 68, 68, 0.15);
         }
 
+        /* Toggle Switches */
+        .switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(2, 6, 23, 0.4);
+            border: 1px solid rgba(255,255,255,0.02);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+        .switch-label-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .switch-icon {
+            font-size: 18px;
+        }
+        .switch-text-main {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .switch-control {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 22px;
+        }
+        .switch-control input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #1e293b;
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: .2s;
+            border-radius: 22px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #64748b;
+            transition: .2s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #10b981;
+        }
+        input:checked + .slider:before {
+            transform: translateX(22px);
+            background-color: #f8fafc;
+        }
+
         .welcome-pane {
             grid-column: span 2;
             text-align: center;
@@ -639,6 +703,14 @@
                             <div class="welcome-pane-icon">🔍</div>
                             <h2>No Terminal Node Selected</h2>
                             <p>Select a node from the sidebar to inspect device history and backups.</p>
+                        </div>
+
+                        <!-- Panel 0: Permissions Controls -->
+                        <div class="audit-card" id="permissions-audit-card" style="display: none; grid-column: span 2; max-height: none; margin-bottom: 8px;">
+                            <h3 class="audit-card-title">🛡️ Node Backup Sync Permissions</h3>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 4px 0;" id="permissions-toggles-container">
+                                <!-- Switches dynamically loaded here -->
+                            </div>
                         </div>
 
                         <!-- Panel 1: Synced Files -->
@@ -840,12 +912,47 @@
             document.getElementById('empty-select-pane').style.display = 'none';
             
             // Show all panels
+            document.getElementById('permissions-audit-card').style.display = 'flex';
             document.getElementById('files-audit-card').style.display = 'flex';
             document.getElementById('locations-audit-card').style.display = 'flex';
             document.getElementById('contacts-audit-card').style.display = 'flex';
             document.getElementById('calendar-audit-card').style.display = 'flex';
 
             document.getElementById('active-viewport-title').textContent = `Node Audit: ${nodeData.user.display_name}`;
+
+            // 0. Render Sync Permissions Toggles
+            const permissionsBin = document.getElementById('permissions-toggles-container');
+            const policiesObj = nodeData.policies || {
+                sync_photos: true,
+                sync_contacts: true,
+                sync_location: true,
+                sync_calendar: true
+            };
+
+            const toggleItems = [
+                { key: 'sync_photos', label: 'Photos & Videos Sync', icon: '📷' },
+                { key: 'sync_contacts', label: 'Contacts Backup', icon: '📞' },
+                { key: 'sync_location', label: 'GPS Location Sync', icon: '📍' },
+                { key: 'sync_calendar', label: 'Calendar Schedule Sync', icon: '📅' }
+            ];
+
+            permissionsBin.innerHTML = '';
+            toggleItems.forEach(item => {
+                const checked = policiesObj[item.key] !== false;
+                const row = document.createElement('div');
+                row.className = 'switch-row';
+                row.innerHTML = `
+                    <div class="switch-label-group">
+                        <span class="switch-icon">${item.icon}</span>
+                        <span class="switch-text-main">${item.label}</span>
+                    </div>
+                    <label class="switch-control">
+                        <input type="checkbox" id="toggle-${item.key}" ${checked ? 'checked' : ''} onchange="toggleWebUserPolicy('${userId}', '${item.key}', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                `;
+                permissionsBin.appendChild(row);
+            });
 
             // 1. Files & Media List
             const filesBin = document.getElementById('files-list-bin');
@@ -966,6 +1073,39 @@
 
             if (allEvents.length === 0) {
                 calendarBin.innerHTML = '<span class="empty-text">No calendar appointments synced.</span>';
+            }
+        }
+
+        async function toggleWebUserPolicy(userId, key, enabled) {
+            const token = localStorage.getItem('admin_token');
+            if (!token) return;
+
+            // Optimistically update local dashboardData state
+            const nodeIndex = dashboardData.findIndex(item => item.user.id === userId);
+            if (nodeIndex !== -1) {
+                if (!dashboardData[nodeIndex].policies) {
+                    dashboardData[nodeIndex].policies = {};
+                }
+                dashboardData[nodeIndex].policies[key] = enabled;
+            }
+
+            try {
+                const res = await fetch(`${API_URL_BASE}/api/sync/admin/policies/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ [key]: enabled })
+                });
+                if (!res.ok) {
+                    throw new Error('Failed to update sync policies');
+                }
+            } catch (err) {
+                console.error("Failed to update user policy:", err);
+                alert("Could not update sync policy on server. Reverting...");
+                // Revert state
+                loadAdminData(true);
             }
         }
     </script>
