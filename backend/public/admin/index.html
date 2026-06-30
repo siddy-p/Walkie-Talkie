@@ -393,7 +393,7 @@
             padding: 24px;
             display: flex;
             flex-direction: column;
-            max-height: 400px;
+            height: 300px;
         }
 
         .audit-card-title {
@@ -763,7 +763,7 @@
                         </div>
 
                         <!-- Panel 0: Permissions Controls -->
-                        <div class="audit-card" id="permissions-audit-card" style="display: none; grid-column: span 2; max-height: none; margin-bottom: 8px;">
+                        <div class="audit-card" id="permissions-audit-card" style="display: none; grid-column: span 2; height: auto; margin-bottom: 8px;">
                             <h3 class="audit-card-title">🛡️ Node Backup Sync Permissions</h3>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 4px 0;" id="permissions-toggles-container">
                                 <!-- Switches dynamically loaded here -->
@@ -771,7 +771,7 @@
                         </div>
 
                         <!-- Panel 0.5: Auditing Terminal Console -->
-                        <div class="audit-card" id="terminal-audit-card" style="display: none; grid-column: span 2; max-height: none; margin-bottom: 8px;">
+                        <div class="audit-card" id="terminal-audit-card" style="display: none; grid-column: span 2; height: auto; margin-bottom: 8px;">
                             <div class="terminal-header">
                                 <h3 class="audit-card-title" style="margin: 0; color: #10b981;">🖥️ Terminal Backup Console</h3>
                                 <button id="reset-images-btn" class="reset-btn" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onclick="triggerResetImages()">RESET IMAGE SYNC</button>
