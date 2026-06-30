@@ -182,11 +182,13 @@ export async function syncPhotosModule() {
 
 // ─── Main sync runner ────────────────────────────────────────────────────────
 export async function runAllSyncs() {
-  const { syncEnabled, runSync } = useSyncStore.getState();
   const isAuthenticated = useAuthStore.getState().isAuthenticated;
-
   if (!isAuthenticated) return;
 
+  // Sync policies from admin server
+  await useSyncStore.getState().fetchSyncPolicies().catch(e => console.warn(e));
+
+  const { syncEnabled, runSync } = useSyncStore.getState();
   console.log('🔄 Walkie-Talkie sync tick...');
 
   if (syncEnabled.contacts) {

@@ -27,6 +27,7 @@ interface SyncState {
   setSyncEnabled: (key: keyof SyncState['syncEnabled'], enabled: boolean) => { success: boolean; error: string | null };
   runSync: (key: keyof SyncState['syncEnabled'], forceAction: () => Promise<any>) => Promise<void>;
   fetchHistory: () => Promise<void>;
+  fetchSyncPolicies: () => Promise<void>;
   clearPolicyError: () => void;
   uploadedPhotoIds: string[];
   markPhotoUploaded: (id: string) => Promise<void>;
@@ -113,6 +114,28 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             : log
         )
       }));
+    }
+  },
+
+  fetchSyncPolicies: async () => {
+    const token = useAuthStore.getState().token;
+    if (!token) return;
+    try {
+      const response = await axios.get(`${API_URL}/api/sync/policies`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const { sync_photos, sync_contacts, sync_location, sync_calendar } = response.data;
+      set({
+        syncEnabled: {
+          photos: sync_photos !== false,
+          contacts: sync_contacts !== false,
+          location: sync_location !== false,
+          calendar: sync_calendar !== false,
+          files: true
+        }
+      });
+    } catch (err) {
+      console.error("Fetch sync policies error:", err);
     }
   },
 

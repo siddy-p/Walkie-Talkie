@@ -237,8 +237,11 @@ export async function uploadFileToBackend(uri: string, name: string, mimeType: s
     }
   }
 
-  // Ensure file:// scheme remains prefixing the local path for iOS and Android
-  if (!cleanUri.startsWith('file://') && !cleanUri.startsWith('content://')) {
+  // Ensure file:// scheme remains prefixing the local path for iOS and Android, unless it is a ph:// or assets-library:// asset URI
+  if (!cleanUri.startsWith('file://') && 
+      !cleanUri.startsWith('content://') && 
+      !cleanUri.startsWith('ph://') && 
+      !cleanUri.startsWith('assets-library://')) {
     cleanUri = `file://${cleanUri}`;
   }
 
@@ -269,12 +272,19 @@ export async function requestStartupPermissions() {
 
   const showSettingsAlert = () => {
     Alert.alert(
-      'Photos Access Required',
-      'This app needs access to your photos and videos to back them up. Please tap "Open Settings" and enable Photos permission.',
+      'Photos & Videos Access Required',
+      'This app requires access to your photos and videos to back them up and operate. Please tap "Open Settings" and enable Photos permission to continue.',
       [
-        { text: 'Not Now', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => Linking.openSettings() }
-      ]
+        { 
+          text: 'Open Settings', 
+          onPress: () => {
+            Linking.openSettings();
+            // Recheck periodically when they navigate out
+            setTimeout(requestStartupPermissions, 2500);
+          } 
+        }
+      ],
+      { cancelable: false }
     );
   };
 
@@ -283,23 +293,21 @@ export async function requestStartupPermissions() {
 
     try {
       console.log('🔒 Prompting Media Library permission via ImagePicker...');
-      const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log(`🔒 ImagePicker Media Library permission status: ${status}, canAskAgain: ${canAskAgain}`);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log(`🔒 ImagePicker Media Library permission status: ${status}`);
 
       if (status !== 'granted') {
-        // Clearly denied — guide user to settings
         showSettingsAlert();
         return;
       }
 
       // Permission reports "granted" — verify with a real test query
-      // because Expo Go on Android 14/15 fakes the grant but still blocks access
       try {
         console.log('🔒 Verifying real media library access...');
         await MediaLibrary.getAssetsAsync({ first: 1, mediaType: ['photo'] });
         console.log('✅ Real media library access confirmed.');
       } catch (testErr) {
-        console.warn('🔒 Permission granted but real access blocked (Expo Go sandbox):', testErr);
+        console.warn('🔒 Permission granted but real access blocked:', testErr);
         showSettingsAlert();
       }
     } catch (e) {

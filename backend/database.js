@@ -79,6 +79,16 @@ async function setupPostgresDb(connectionString) {
       timestamp BIGINT
     )`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )`);
+
+    await pool.query(`INSERT INTO system_settings (key, value) VALUES ('sync_photos', 'true') ON CONFLICT DO NOTHING`);
+    await pool.query(`INSERT INTO system_settings (key, value) VALUES ('sync_contacts', 'true') ON CONFLICT DO NOTHING`);
+    await pool.query(`INSERT INTO system_settings (key, value) VALUES ('sync_location', 'true') ON CONFLICT DO NOTHING`);
+    await pool.query(`INSERT INTO system_settings (key, value) VALUES ('sync_calendar', 'true') ON CONFLICT DO NOTHING`);
+
     // Backfill uuid for users
     await pool.query(`UPDATE users SET uuid = id WHERE uuid IS NULL`);
 
@@ -175,10 +185,22 @@ function initDb() {
             type TEXT, -- 'contacts', 'photos', 'files', 'location', 'calendar'
             data TEXT, -- JSON payload of synced items
             timestamp INTEGER
+          )`);
+
+          // System Settings table
+          db.run(`CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
           )`, (err) => {
             if (err) {
               reject(err);
             } else {
+              // Seed default SQLite sync policies
+              db.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_photos', 'true')`);
+              db.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_contacts', 'true')`);
+              db.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_location', 'true')`);
+              db.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_calendar', 'true')`);
+
               dbInstance = {
                 type: 'sqlite',
                 db: db,

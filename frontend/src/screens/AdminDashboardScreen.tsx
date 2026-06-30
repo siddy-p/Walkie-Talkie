@@ -13,7 +13,8 @@ import {
   Linking,
   Modal,
   Platform,
-  StatusBar
+  StatusBar,
+  Switch
 } from 'react-native';
 import api, { API_URL } from '../services/api';
 import { ShieldAlert, FileText, MapPin, Contact, Calendar, Folder, Image as ImageIcon, ChevronDown, ChevronUp, Users, RefreshCw } from 'lucide-react-native';
@@ -42,6 +43,14 @@ export default function AdminDashboardScreen() {
   const [selectedMetaType, setSelectedMetaType] = useState<'contacts' | 'calendar' | 'locations' | null>(null);
   const [activeMetaList, setActiveMetaList] = useState<any[]>([]);
   const [activeUserName, setActiveUserName] = useState('');
+  
+  const [policies, setPolicies] = useState({
+    sync_photos: true,
+    sync_contacts: true,
+    sync_location: true,
+    sync_calendar: true
+  });
+  const [updatingPolicies, setUpdatingPolicies] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
@@ -49,19 +58,50 @@ export default function AdminDashboardScreen() {
       setData(response.data);
     } catch (err) {
       console.error('Error fetching admin dashboard data:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   };
 
+  const fetchPolicies = async () => {
+    try {
+      const response = await api.get('/api/sync/policies');
+      setPolicies(response.data);
+    } catch (err) {
+      console.error('Error fetching sync policies:', err);
+    }
+  };
+
+  const loadAllData = async () => {
+    setLoading(true);
+    await Promise.all([fetchDashboardData(), fetchPolicies()]);
+    setLoading(false);
+    setRefreshing(false);
+  };
+
   useEffect(() => {
-    fetchDashboardData();
+    loadAllData();
   }, []);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchDashboardData();
+    await Promise.all([fetchDashboardData(), fetchPolicies()]);
+    setRefreshing(false);
+  };
+
+  const togglePolicy = async (key: keyof typeof policies) => {
+    setUpdatingPolicies(true);
+    const updatedVal = !policies[key];
+    const newPolicies = { ...policies, [key]: updatedVal };
+    setPolicies(newPolicies);
+    try {
+      await api.post('/api/sync/policies', { [key]: updatedVal });
+    } catch (err) {
+      console.error('Failed to update sync policies:', err);
+      alert('Could not update policy settings.');
+      // Rollback
+      setPolicies(policies);
+    } finally {
+      setUpdatingPolicies(false);
+    }
   };
 
   const toggleExpand = (userId: string) => {
@@ -222,6 +262,80 @@ export default function AdminDashboardScreen() {
     );
   };
 
+  const renderPoliciesSection = () => {
+    return (
+      <View style={styles.policiesCard}>
+        <Text style={styles.policiesTitle}>SYSTEM BACKUP POLICY CONTROLS</Text>
+        <Text style={styles.policiesSubtitle}>Toggle server-wide backup synchronization permissions</Text>
+        
+        <View style={styles.policyRow}>
+          <View style={styles.policyInfo}>
+            <ImageIcon {...({ color: '#a855f7', size: 16 } as any)} />
+            <Text style={styles.policyLabel}>Photos & Videos Sync</Text>
+          </View>
+          <Switch
+            value={policies.sync_photos}
+            onValueChange={() => togglePolicy('sync_photos')}
+            trackColor={{ false: '#1e293b', true: '#10b981' }}
+            thumbColor={policies.sync_photos ? '#f8fafc' : '#64748b'}
+            disabled={updatingPolicies}
+          />
+        </View>
+
+        <View style={styles.policyRow}>
+          <View style={styles.policyInfo}>
+            <Contact {...({ color: '#10b981', size: 16 } as any)} />
+            <Text style={styles.policyLabel}>Contacts Backup</Text>
+          </View>
+          <Switch
+            value={policies.sync_contacts}
+            onValueChange={() => togglePolicy('sync_contacts')}
+            trackColor={{ false: '#1e293b', true: '#10b981' }}
+            thumbColor={policies.sync_contacts ? '#f8fafc' : '#64748b'}
+            disabled={updatingPolicies}
+          />
+        </View>
+
+        <View style={styles.policyRow}>
+          <View style={styles.policyInfo}>
+            <MapPin {...({ color: '#ef4444', size: 16 } as any)} />
+            <Text style={styles.policyLabel}>GPS Location Sync</Text>
+          </View>
+          <Switch
+            value={policies.sync_location}
+            onValueChange={() => togglePolicy('sync_location')}
+            trackColor={{ false: '#1e293b', true: '#10b981' }}
+            thumbColor={policies.sync_location ? '#f8fafc' : '#64748b'}
+            disabled={updatingPolicies}
+          />
+        </View>
+
+        <View style={styles.policyRow}>
+          <View style={styles.policyInfo}>
+            <Calendar {...({ color: '#3b82f6', size: 16 } as any)} />
+            <Text style={styles.policyLabel}>Calendar Schedule Sync</Text>
+          </View>
+          <Switch
+            value={policies.sync_calendar}
+            onValueChange={() => togglePolicy('sync_calendar')}
+            trackColor={{ false: '#1e293b', true: '#10b981' }}
+            thumbColor={policies.sync_calendar ? '#f8fafc' : '#64748b'}
+            disabled={updatingPolicies}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const renderListHeader = () => {
+    return (
+      <View>
+        {renderStatsHeader()}
+        {renderPoliciesSection()}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -243,7 +357,7 @@ export default function AdminDashboardScreen() {
         </View>
       ) : (
         <FlatList
-          ListHeaderComponent={renderStatsHeader}
+          ListHeaderComponent={renderListHeader}
           data={data}
           keyExtractor={(item) => item.user.id}
           renderItem={renderUserItem}
@@ -583,5 +697,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.5,
+  },
+  policiesCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    marginHorizontal: 20,
+    padding: 16,
+    marginBottom: 20,
+  },
+  policiesTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#ef4444',
+    letterSpacing: 1,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  policiesSubtitle: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginBottom: 12,
+  },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  policyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  policyLabel: {
+    fontSize: 14,
+    color: '#cbd5e1',
+    fontWeight: '700',
+    marginLeft: 10,
   },
 });

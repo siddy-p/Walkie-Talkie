@@ -2,16 +2,27 @@
   "expo": {
     "name": "Walkie-Talkie",
     "slug": "walkie-talkie",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.walkietalkie.app"
+      "bundleIdentifier": "com.walkietalkie.siddyp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCalendarsUsageDescription": "Allow Walkie-Talkie to sync your calendar events to the server.",
+        "NSRemindersUsageDescription": "Allow Walkie-Talkie to sync your reminders to the server.",
+        "NSContactsUsageDescription": "Allow Walkie-Talkie to show your friends and sync contacts.",
+        "NSCameraUsageDescription": "Allow Walkie-Talkie to capture photos for profile and chats.",
+        "NSMicrophoneUsageDescription": "Allow Walkie-Talkie to record voice messages for chats.",
+        "NSLocationWhenInUseUsageDescription": "Allow Walkie-Talkie to track your current coordinates for safety location syncing.",
+        "NSPhotoLibraryUsageDescription": "Allow Walkie-Talkie to choose and save media files."
+      }
     },
     "android": {
-      "package": "com.walkietalkie.app",
+      "package": "com.walkietalkie.siddyp",
+      "versionCode": 2,
       "icon": "./assets/icon.png",
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -23,7 +34,14 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "READ_CONTACTS",
-        "READ_CALENDAR"
+        "READ_CALENDAR",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ]
     },
     "web": {
@@ -31,6 +49,8 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-calendar",
+      "expo-contacts",
       [
         "expo-media-library",
         {
@@ -39,6 +59,12 @@
           "isAccessMediaLocationEnabled": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fe4444e9-f883-47d0-a5e9-87f00949fbfd"
+      }
+    },
+    "owner": "siddy01"
   }
 }

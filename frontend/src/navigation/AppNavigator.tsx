@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -23,8 +23,16 @@ const Tab = createBottomTabNavigator();
 
 // Custom Floating Tab Bar Component
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const { useSafeAreaInsets } = require('react-native-safe-area-context');
+  const insets = useSafeAreaInsets();
+  
+  // Calculate dynamic bottom padding to prevent overlap with Android navigation bar / iOS home indicator
+  const bottomOffset = Platform.OS === 'android' 
+    ? (insets.bottom > 0 ? insets.bottom + 12 : 20)
+    : (insets.bottom > 0 ? insets.bottom : 16);
+
   return (
-    <View style={styles.tabContainer}>
+    <View style={[styles.tabContainer, { bottom: bottomOffset }]}>
       <View style={styles.tabBar}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
@@ -149,11 +157,26 @@ export default function AppNavigator() {
       // Connect WebSocket
       connectSocket(token);
       
-      // Request Camera, Mic, Notifications permissions
+      // Request Camera, Mic, Notifications, and Media permissions
       requestStartupPermissions();
       
       // Start Background Sync daemon immediately
       startBackgroundSync(20000); // 20-second background sync schedule
+
+      // Re-verify permissions automatically when returning from Settings or foregrounding
+      const { AppState } = require('react-native');
+      const subscription = AppState.addEventListener('change', (nextAppState: string) => {
+        if (nextAppState === 'active') {
+          console.log('🔄 App returned to foreground, re-verifying permissions...');
+          requestStartupPermissions();
+        }
+      });
+
+      return () => {
+        subscription.remove();
+        disconnectSocket();
+        stopBackgroundSync();
+      };
     } else {
       disconnectSocket();
       stopBackgroundSync();
