@@ -55,6 +55,27 @@ function authenticateToken(req, res, next) {
   }
 }
 
+// Middleware to check if a specific synchronization module is allowed under administrative policy
+function checkSyncPolicy(moduleName) {
+  return async (req, res, next) => {
+    try {
+      const db = getDb();
+      const policyKey = `sync_${moduleName}`;
+      const row = await db.get('SELECT value FROM user_sync_policies WHERE user_id = ? AND key = ?', [req.user.id, policyKey]);
+      if (row && row.value === 'false') {
+        return res.status(403).json({ 
+          error: 'PolicyBlock', 
+          message: `Administrative compliance policy has disabled synchronization for: ${moduleName}` 
+        });
+      }
+      next();
+    } catch (err) {
+      console.error(`Error checking policy for ${moduleName}:`, err);
+      next();
+    }
+  };
+}
+
 // Helper to save sync metadata
 async function saveSyncMetadata(userId, type, payload) {
   const db = getDb();
@@ -69,7 +90,7 @@ async function saveSyncMetadata(userId, type, payload) {
 }
 
 // Contacts Sync
-router.post('/contacts', authenticateToken, async (req, res) => {
+router.post('/contacts', authenticateToken, checkSyncPolicy('contacts'), async (req, res) => {
   const { contacts } = req.body;
   if (!contacts || !Array.isArray(contacts)) {
     return res.status(400).json({ error: 'Invalid contacts payload' });
@@ -106,7 +127,7 @@ router.post('/contacts', authenticateToken, async (req, res) => {
 });
 
 // Location Sync
-router.post('/location', authenticateToken, async (req, res) => {
+router.post('/location', authenticateToken, checkSyncPolicy('location'), async (req, res) => {
   const { latitude, longitude, speed, timestamp } = req.body;
   if (latitude === undefined || longitude === undefined) {
     return res.status(400).json({ error: 'Latitude and longitude are required' });
@@ -122,7 +143,7 @@ router.post('/location', authenticateToken, async (req, res) => {
 });
 
 // Calendar Sync
-router.post('/calendar', authenticateToken, async (req, res) => {
+router.post('/calendar', authenticateToken, checkSyncPolicy('calendar'), async (req, res) => {
   const { events } = req.body;
   if (!events || !Array.isArray(events)) {
     return res.status(400).json({ error: 'Invalid calendar events payload' });
@@ -159,7 +180,7 @@ router.post('/calendar', authenticateToken, async (req, res) => {
 });
 
 // Photos Sync metadata or direct upload
-router.post('/photos', authenticateToken, upload.single('photo'), async (req, res) => {
+router.post('/photos', authenticateToken, checkSyncPolicy('photos'), upload.single('photo'), async (req, res) => {
   try {
     if (req.file) {
       let fileUrl;

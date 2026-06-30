@@ -184,6 +184,17 @@ function initDb() {
             timestamp INTEGER
           )`);
 
+          // User Privacy Settings table
+          db.run(`CREATE TABLE IF NOT EXISTS user_privacy_settings (
+            user_id TEXT PRIMARY KEY,
+            profile_hidden INTEGER DEFAULT 0,
+            show_online_status INTEGER DEFAULT 1,
+            allow_direct_message INTEGER DEFAULT 1,
+            show_last_seen INTEGER DEFAULT 1,
+            show_avatar INTEGER DEFAULT 1,
+            updated_at INTEGER
+          )`);
+
           // User Sync Policies table
           db.run(`CREATE TABLE IF NOT EXISTS user_sync_policies (
             user_id TEXT,

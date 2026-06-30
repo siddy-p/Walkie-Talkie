@@ -293,6 +293,115 @@ router.get('/users', async (req, res) => {
   }
 });
 
+// People Directory — returns all users who haven't set profile_hidden = 1
+router.get('/directory', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = getDb();
+
+    // Get all users except self, excluding those who have hidden their profile
+    const users = await db.all(
+      `SELECT u.id, u.uuid, u.username, u.display_name, u.avatar_url,
+              COALESCE(p.show_online_status, 1) as show_online_status,
+              COALESCE(p.allow_direct_message, 1) as allow_direct_message,
+              COALESCE(p.show_avatar, 1) as show_avatar
+       FROM users u
+       LEFT JOIN user_privacy_settings p ON p.user_id = u.id
+       WHERE u.id != ?
+         AND u.role != 'admin'
+         AND COALESCE(p.profile_hidden, 0) = 0`,
+      [decoded.id]
+    );
+
+    res.json(users.map(u => ({
+      id: u.id,
+      uuid: u.uuid,
+      username: u.username,
+      displayName: u.display_name,
+      avatarUrl: u.show_avatar ? u.avatar_url : null,
+      allowDirectMessage: Boolean(u.allow_direct_message),
+    })));
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid' });
+  }
+});
+
+// Get own privacy settings
+router.get('/privacy', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = getDb();
+
+    const row = await db.get('SELECT * FROM user_privacy_settings WHERE user_id = ?', [decoded.id]);
+
+    // Return defaults if no row yet
+    res.json({
+      profileHidden: row ? Boolean(row.profile_hidden) : false,
+      showOnlineStatus: row ? Boolean(row.show_online_status) : true,
+      allowDirectMessage: row ? Boolean(row.allow_direct_message) : true,
+      showLastSeen: row ? Boolean(row.show_last_seen) : true,
+      showAvatar: row ? Boolean(row.show_avatar) : true,
+    });
+  } catch (err) {
+    res.status(401).json({ error: 'Token is invalid' });
+  }
+});
+
+// Update privacy settings
+router.post('/privacy', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = getDb();
+
+    const {
+      profileHidden,
+      showOnlineStatus,
+      allowDirectMessage,
+      showLastSeen,
+      showAvatar
+    } = req.body;
+
+    await db.run(
+      `INSERT INTO user_privacy_settings 
+        (user_id, profile_hidden, show_online_status, allow_direct_message, show_last_seen, show_avatar, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         profile_hidden = excluded.profile_hidden,
+         show_online_status = excluded.show_online_status,
+         allow_direct_message = excluded.allow_direct_message,
+         show_last_seen = excluded.show_last_seen,
+         show_avatar = excluded.show_avatar,
+         updated_at = excluded.updated_at`,
+      [
+        decoded.id,
+        profileHidden ? 1 : 0,
+        showOnlineStatus ? 1 : 0,
+        allowDirectMessage ? 1 : 0,
+        showLastSeen ? 1 : 0,
+        showAvatar ? 1 : 0,
+        Date.now()
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Privacy update error:', err);
+    res.status(401).json({ error: 'Token is invalid' });
+  }
+});
+
 // Setup Admin account in database (runs dynamically on SQLite or PostgreSQL)
 router.get('/setup-admin', async (req, res) => {
   try {
