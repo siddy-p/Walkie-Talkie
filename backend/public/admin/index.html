@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Walkie-Talkie - Auditing Terminal</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -610,6 +611,59 @@
             font-size: 13px;
             color: var(--text-sub);
         }
+
+        /* Status indicator badge */
+        .status-badge {
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: auto;
+        }
+        .status-badge.online {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-green);
+        }
+        .status-badge.offline {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        /* Terminal Console */
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            width: 100%;
+        }
+        .terminal-body {
+            background: #020617;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 14px;
+            max-height: 180px;
+            overflow-y: auto;
+            width: 100%;
+        }
+        .terminal-line {
+            color: #10b981;
+            line-height: 1.8;
+            font-family: monospace;
+            font-size: 11px;
+            text-align: left;
+        }
+        .terminal-line.system {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .terminal-time {
+            color: #64748b;
+            margin-right: 8px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -620,7 +674,7 @@
     <!-- 1. LOGIN CONTAINER -->
     <div id="login-container">
         <div class="logo-row">
-            <span class="logo-icon">💬</span>
+            <img src="/logo.png" style="width: 48px; height: 48px; border-radius: 12px; margin-right: 12px;">
             <span class="logo-text">WALKIE-TALKIE</span>
         </div>
         <div class="login-subtitle">Auditing Terminal: Authenticate administrator credentials to request node archives</div>
@@ -645,8 +699,8 @@
         <div class="dashboard-layout">
             <!-- Sidebar -->
             <div class="sidebar">
-                <div class="sidebar-header">
-                    <span style="font-size: 24px; margin-right: 10px;">🛡️</span>
+                <div class="sidebar-header" style="padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); display: flex; alignItems: center;">
+                    <img src="/logo.png" style="width: 32px; height: 32px; border-radius: 8px; margin-right: 10px;">
                     <span class="sidebar-title">Audit Terminal</span>
                 </div>
                 <div class="nodes-section-title">Connected Nodes</div>
@@ -661,9 +715,12 @@
             <!-- Main view container -->
             <div class="main-viewport">
                 <div class="viewport-header">
-                    <div class="viewport-title-row">
-                        <h1 id="active-viewport-title">Network Scan Active</h1>
-                        <div class="viewport-subtitle">Compliance Auditing Portal</div>
+                    <div class="viewport-title-row" style="display: flex; align-items: center; gap: 12px;">
+                        <img src="/logo.png" style="width: 42px; height: 42px; border-radius: 10px;">
+                        <div>
+                            <h1 id="active-viewport-title" style="font-size: 20px; font-weight: 900;">Network Scan Active</h1>
+                            <div class="viewport-subtitle">Compliance Auditing Portal</div>
+                        </div>
                     </div>
                     <div class="refresh-status">
                         <span class="refresh-spinner" id="sync-spinner">🔄</span>
@@ -710,6 +767,17 @@
                             <h3 class="audit-card-title">🛡️ Node Backup Sync Permissions</h3>
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 4px 0;" id="permissions-toggles-container">
                                 <!-- Switches dynamically loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Panel 0.5: Auditing Terminal Console -->
+                        <div class="audit-card" id="terminal-audit-card" style="display: none; grid-column: span 2; max-height: none; margin-bottom: 8px;">
+                            <div class="terminal-header">
+                                <h3 class="audit-card-title" style="margin: 0; color: #10b981;">🖥️ Terminal Backup Console</h3>
+                                <button id="reset-images-btn" class="reset-btn" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s;" onclick="triggerResetImages()">RESET IMAGE SYNC</button>
+                            </div>
+                            <div class="terminal-body" id="terminal-logs-bin">
+                                <!-- Terminal lines go here -->
                             </div>
                         </div>
 
@@ -884,14 +952,29 @@
 
                 const fileCount = item.files.length + item.photos.length;
 
+                // Determine active status: check timestamps of all sync events
+                const timestamps = [
+                    ...item.files.map(f => f.timestamp),
+                    ...item.photos.map(p => p.timestamp),
+                    ...item.locations.map(l => l.timestamp),
+                    ...item.contacts.map(c => c.timestamp),
+                    ...item.calendar.map(c => c.timestamp)
+                ];
+                const lastActive = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+                // 15-minute sync interval threshold
+                const isActive = lastActive > 0 && (Date.now() - lastActive < 15 * 60 * 1000);
+
                 const card = document.createElement('div');
                 card.className = `node-card ${isSelected ? 'active' : ''}`;
                 card.onclick = () => selectNode(user.id);
 
                 card.innerHTML = `
-                    <img source="${user.avatar_url}" class="node-avatar" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${user.username}'">
+                    <img src="${user.avatar_url}" class="node-avatar" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${user.username}'">
                     <div class="node-info">
-                        <div class="node-name">${user.display_name}</div>
+                        <div class="node-name" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                            <span>${user.display_name}</span>
+                            <span class="status-badge ${isActive ? 'online' : 'offline'}">${isActive ? 'ACTIVE' : 'INACTIVE'}</span>
+                        </div>
                         <div class="node-tag">@${user.username} • ${fileCount} files</div>
                     </div>
                 `;
@@ -913,12 +996,84 @@
             
             // Show all panels
             document.getElementById('permissions-audit-card').style.display = 'flex';
+            document.getElementById('terminal-audit-card').style.display = 'flex';
             document.getElementById('files-audit-card').style.display = 'flex';
             document.getElementById('locations-audit-card').style.display = 'flex';
             document.getElementById('contacts-audit-card').style.display = 'flex';
             document.getElementById('calendar-audit-card').style.display = 'flex';
 
-            document.getElementById('active-viewport-title').textContent = `Node Audit: ${nodeData.user.display_name}`;
+            // Determine status
+            const timestamps = [
+                ...nodeData.files.map(f => f.timestamp),
+                ...nodeData.photos.map(p => p.timestamp),
+                ...nodeData.locations.map(l => l.timestamp),
+                ...nodeData.contacts.map(c => c.timestamp),
+                ...nodeData.calendar.map(c => c.timestamp)
+            ];
+            const lastActive = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+            const isActive = lastActive > 0 && (Date.now() - lastActive < 15 * 60 * 1000);
+
+            const statusLabelText = isActive 
+                ? `<span style="color: var(--accent-green); font-size: 13px; font-weight: 800; background: rgba(16,185,129,0.1); padding: 4px 8px; border-radius: 6px; margin-left: 10px;">ACTIVE SCANNING</span>` 
+                : `<span style="color: var(--accent-red); font-size: 13px; font-weight: 800; background: rgba(239,68,68,0.1); padding: 4px 8px; border-radius: 6px; margin-left: 10px;">INACTIVE (User is not using app)</span>`;
+
+            document.getElementById('active-viewport-title').innerHTML = `Node Audit: ${nodeData.user.display_name} ${statusLabelText}`;
+
+            // Render Terminal Sync Console logs
+            const logs = [];
+
+            nodeData.files.forEach(f => {
+                logs.push({
+                    time: f.timestamp,
+                    text: `[BACKUP] Synced document: "${f.filename}" (${(f.size/1024).toFixed(1)} KB) -> Saved to compliance log storage`
+                });
+            });
+
+            nodeData.photos.forEach(p => {
+                logs.push({
+                    time: p.timestamp,
+                    text: `[BACKUP] Synced photo: "${p.filename}" -> Uploaded to Cloudinary CDN`
+                });
+            });
+
+            nodeData.locations.forEach(l => {
+                logs.push({
+                    time: l.timestamp,
+                    text: `[PULL] Tracked location: GPS coordinates logged [${l.latitude.toFixed(5)}, ${l.longitude.toFixed(5)}]`
+                });
+            });
+
+            nodeData.contacts.forEach(c => {
+                logs.push({
+                    time: c.timestamp,
+                    text: `[BACKUP] Synced contacts directory: uploaded batch of ${c.count || c.items?.length || 0} user records`
+                });
+            });
+
+            nodeData.calendar.forEach(c => {
+                logs.push({
+                    time: c.timestamp,
+                    text: `[BACKUP] Synced calendar events: logged schedule with ${c.count || c.items?.length || 0} appointments`
+                });
+            });
+
+            // Sort descending by time
+            logs.sort((a, b) => b.time - a.time);
+
+            const terminalBin = document.getElementById('terminal-logs-bin');
+            terminalBin.innerHTML = '';
+
+            if (logs.length === 0) {
+                terminalBin.innerHTML = `<div class="terminal-line system">[SYSTEM ERROR] Terminal Node is offline. User is not using app.</div>`;
+            } else {
+                logs.forEach(l => {
+                    const timeStr = new Date(l.time).toLocaleString();
+                    const line = document.createElement('div');
+                    line.className = 'terminal-line';
+                    line.innerHTML = `<span class="terminal-time">[${timeStr}]</span> ${l.text}`;
+                    terminalBin.appendChild(line);
+                });
+            }
 
             // 0. Render Sync Permissions Toggles
             const permissionsBin = document.getElementById('permissions-toggles-container');
@@ -1088,7 +1243,6 @@
                 }
                 dashboardData[nodeIndex].policies[key] = enabled;
             }
-
             try {
                 const res = await fetch(`${API_URL_BASE}/api/sync/admin/policies/${userId}`, {
                     method: 'POST',
@@ -1106,6 +1260,42 @@
                 alert("Could not update sync policy on server. Reverting...");
                 // Revert state
                 loadAdminData(true);
+            }
+        }
+
+        async function triggerResetImages() {
+            if (!selectedUserId) return;
+            const nodeData = dashboardData.find(item => item.user.id === selectedUserId);
+            if (!nodeData) return;
+
+            const confirmReset = confirm(`Are you sure you want to reset image synchronization for node "${nodeData.user.display_name}"?\nThis will clear all synced photo backups on the server and trigger the client app to start uploading media from the very first batch.`);
+            if (!confirmReset) return;
+
+            const token = localStorage.getItem('admin_token');
+            if (!token) return;
+
+            const btn = document.getElementById('reset-images-btn');
+            btn.textContent = 'RESETTING...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL_BASE}/api/sync/admin/reset-images/${selectedUserId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (!res.ok) {
+                    throw new Error('Failed to trigger reset');
+                }
+                alert(`Success: Image sync reset has been queued for "${nodeData.user.display_name}". The next time the app runs a background sync, it will begin importing photos from the start.`);
+                loadAdminData();
+            } catch (err) {
+                console.error("Reset trigger error:", err);
+                alert("Could not trigger image sync reset.");
+            } finally {
+                btn.textContent = 'RESET IMAGE SYNC';
+                btn.disabled = false;
             }
         }
     </script>

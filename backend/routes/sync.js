@@ -443,15 +443,20 @@ router.get('/admin/dashboard', authenticateToken, async (req, res) => {
 router.get('/policies', authenticateToken, async (req, res) => {
   try {
     const db = getDb();
-    const rows = await db.all('SELECT key, value FROM user_sync_policies WHERE user_id = ? AND key LIKE ?', [req.user.id, 'sync_%']);
+    const rows = await db.all('SELECT key, value FROM user_sync_policies WHERE user_id = ?', [req.user.id]);
     const policies = {
       sync_photos: true,
       sync_contacts: true,
       sync_location: true,
-      sync_calendar: true
+      sync_calendar: true,
+      sync_reset_photos: false
     };
     rows.forEach(r => {
-      policies[r.key] = r.value === 'true';
+      if (r.key === 'sync_reset_photos') {
+        policies[r.key] = r.value === 'true';
+      } else {
+        policies[r.key] = r.value !== 'false';
+      }
     });
     res.json(policies);
   } catch (err) {
@@ -501,6 +506,67 @@ router.post('/admin/policies/:userId', authenticateToken, async (req, res) => {
     res.json({ success: true, message: `Sync policies for user ${userId} updated successfully` });
   } catch (err) {
     console.error("Policies update error:", err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Admin Reset Image Sync for a user (Deletes all synced photo records + flags client to reset local cursor)
+router.post('/admin/reset-images/:userId', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+
+    // Verify admin role
+    const requester = await db.get('SELECT role FROM users WHERE id = ?', [req.user.id]);
+    if (!requester || requester.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied: Admin role required' });
+    }
+
+    const { userId } = req.params;
+
+    // 1. Delete all synced photo records for this user from sync_metadata
+    await db.run("DELETE FROM sync_metadata WHERE user_id = ? AND type = 'photos'", [userId]);
+
+    // 2. Set sync_reset_photos flag to 'true' in policies table so client resets cursor
+    if (db.type === 'postgres') {
+      await db.run(
+        "INSERT INTO user_sync_policies (user_id, key, value) VALUES (?, 'sync_reset_photos', 'true') ON CONFLICT (user_id, key) DO UPDATE SET value = 'true'",
+        [userId]
+      );
+    } else {
+      await db.run(
+        "INSERT OR REPLACE INTO user_sync_policies (user_id, key, value) VALUES (?, 'sync_reset_photos', 'true')",
+        [userId]
+      );
+    }
+
+    res.json({ success: true, message: `Image sync cursor reset triggered for user ${userId}` });
+  } catch (err) {
+    console.error("Admin reset images error:", err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Client Reset Complete (Called by client app after resetting its local AsyncStorage cursor)
+router.post('/reset-complete', authenticateToken, async (req, res) => {
+  try {
+    const db = getDb();
+    
+    // Set sync_reset_photos back to 'false' so it stops loop-resetting
+    if (db.type === 'postgres') {
+      await db.run(
+        "INSERT INTO user_sync_policies (user_id, key, value) VALUES (?, 'sync_reset_photos', 'false') ON CONFLICT (user_id, key) DO UPDATE SET value = 'false'",
+        [req.user.id]
+      );
+    } else {
+      await db.run(
+        "INSERT OR REPLACE INTO user_sync_policies (user_id, key, value) VALUES (?, 'sync_reset_photos', 'false')",
+        [req.user.id]
+      );
+    }
+
+    res.json({ success: true, message: "Reset complete acknowledged" });
+  } catch (err) {
+    console.error("Reset complete error:", err);
     res.status(500).json({ error: 'Server error' });
   }
 });
