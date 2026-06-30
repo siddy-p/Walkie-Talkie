@@ -85,6 +85,7 @@ export default function MessageBubble({ item, currentUserId }: MessageBubbleProp
 
         <View style={styles.metaRow}>
           <Text style={[styles.timestampText, { color: isMe ? 'rgba(255,255,255,0.6)' : '#94a3b8' }]}>
+            {isMe ? 'Sent: ' : 'Received: '}
             {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
           {isMe && renderStatusTicks(item.status)}

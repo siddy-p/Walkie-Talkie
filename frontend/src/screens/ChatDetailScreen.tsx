@@ -29,7 +29,8 @@ import {
   Send,
   Video,
   Paperclip,
-  MapPin
+  MapPin,
+  Camera
 } from 'lucide-react-native';
 import MessageBubble from '../components/MessageBubble';
 
@@ -116,6 +117,58 @@ export default function ChatDetailScreen() {
         setIsTypingLocal(false);
         emitTyping(chatId, false);
       }, 3000);
+    }
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      alert('Photo Library permissions are required to share photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0]) {
+      const asset = result.assets[0];
+      const messageId = 'msg_' + Math.random().toString(36).substr(2, 9);
+      
+      // Optimistically show local message
+      const tempMsg: Message = {
+        id: messageId,
+        chatId,
+        senderId: user?.id || '',
+        content: 'Uploading photo...',
+        type: 'image',
+        status: 'sent',
+        timestamp: Date.now(),
+        fileUrl: asset.uri
+      };
+      addMessage(chatId, tempMsg);
+
+      try {
+        const uploadResult = await uploadFileToBackend(
+          asset.uri, 
+          asset.fileName || 'photo.jpg', 
+          asset.mimeType || 'image/jpeg', 
+          'photos'
+        );
+        
+        emitSendMessage({
+          id: messageId,
+          chatId,
+          recipientId,
+          content: 'Sent a photo',
+          type: 'image',
+          fileUrl: uploadResult.fileUrl
+        });
+      } catch (err) {
+        console.error("Media upload failed:", err);
+        alert('Failed to upload photo. Server connection error.');
+      }
     }
   };
 
@@ -287,6 +340,9 @@ export default function ChatDetailScreen() {
       >
         <View style={styles.inputContainer}>
           <View style={styles.attachmentPanel}>
+            <TouchableOpacity style={styles.attachBtn} onPress={pickPhoto}>
+              <Camera {...({ color: "#94a3b8", size: 20 } as any)} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.attachBtn} onPress={pickVideo}>
               <Video {...({ color: "#94a3b8", size: 20 } as any)} />
             </TouchableOpacity>
