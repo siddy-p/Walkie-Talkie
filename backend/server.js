@@ -171,8 +171,29 @@ io.on('connection', (socket) => {
   
   addUserSocket(userId, socket.id);
   
-  // Broadcast user online status
-  socket.broadcast.emit('user_status', { userId, status: 'online' });
+  // Send list of currently online user IDs (respecting privacy toggles) and broadcast online status
+  (async () => {
+    try {
+      const db = getDb();
+      const onlineIds = Array.from(onlineUsers.keys());
+      const privacyRows = await db.all('SELECT user_id FROM user_privacy_settings WHERE show_online_status = 0');
+      const hiddenUserIds = new Set(privacyRows.map(r => r.user_id));
+
+      const filteredOnlineIds = onlineIds.filter(id => !hiddenUserIds.has(id));
+      socket.emit('online_users_list', filteredOnlineIds);
+
+      // Check if connecting user has disabled online status sharing
+      const userPrivacy = await db.get('SELECT show_online_status FROM user_privacy_settings WHERE user_id = ?', [userId]);
+      if (!userPrivacy || userPrivacy.show_online_status !== 0) {
+        socket.broadcast.emit('user_status', { userId, status: 'online' });
+      }
+    } catch (err) {
+      console.error("Error setting socket online presence lists:", err);
+      // Fallback
+      socket.emit('online_users_list', Array.from(onlineUsers.keys()));
+      socket.broadcast.emit('user_status', { userId, status: 'online' });
+    }
+  })();
 
   // Handle joining a direct chat
   socket.on('join_chat', async ({ chatId }) => {
