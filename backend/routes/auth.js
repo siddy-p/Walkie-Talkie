@@ -291,6 +291,31 @@ router.get('/users', async (req, res) => {
   } catch (err) {
     res.status(401).json({ error: 'Token is invalid' });
   }
+// Setup Admin account in database (runs dynamically on SQLite or PostgreSQL)
+router.get('/setup-admin', async (req, res) => {
+  try {
+    const db = getDb();
+    
+    // Check if admin already exists
+    const existingAdmin = await db.get("SELECT id FROM users WHERE username = ? OR role = ? LIMIT 1", ['admin', 'admin']);
+    if (existingAdmin) {
+      return res.send("Admin user already initialized in database.");
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const adminHash = await bcrypt.hash('adminpass', salt);
+
+    // Insert admin user
+    await db.run(
+      "INSERT INTO users (id, uuid, username, password, display_name, avatar_url, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ['usr_admin_node', 'usr_admin_node', 'admin', adminHash, 'Self Chat', 'https://api.dicebear.com/7.x/adventurer/svg?seed=admin', 'admin', Date.now()]
+    );
+
+    res.send("Dedicated admin user (username: 'admin', password: 'adminpass') created successfully in database!");
+  } catch (err) {
+    console.error("Error seeding admin:", err);
+    res.status(500).send("Seeding failed: " + err.message);
+  }
 });
 
 module.exports = { router, JWT_SECRET };
